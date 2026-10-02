@@ -1,0 +1,10 @@
+# Private credentials and personal data - NEVER commit these
+secrets.env
+job_history.db
+jobs_report_*.html
+run.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/

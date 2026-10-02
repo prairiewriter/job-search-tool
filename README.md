@@ -1,10 +1,6 @@
 # Daily Technical Writing Job Search
 
-A free Python script, written with Claude's help, that emails you a daily list of new technical-writing jobs. It checks about a dozen job sources, filters out roles you can't take, and only sends what you haven't seen before.
-
-**Provided as is.** It worked for its author, but job-board APIs change without notice, and I can't promise support or results. Use it, adapt it, and share it.
-
-A Python script that checks ~12 job sources every day — company career pages,
+A Python script, written with Claude's help, that checks ~12 job sources every day — company career pages,
 aggregators, and niche boards — filters for technical-writing roles you're
 actually eligible for (remote worldwide, or hybrid within a commute you'll
 accept), and emails you only the ones you haven't seen before.
@@ -13,6 +9,8 @@ It does **not** replace direct outreach or networking. In a niche field like
 technical writing, this is a safety net that makes sure you never miss a
 posting — it won't manufacture opportunities that don't exist yet.
 
+**Provided as is.** It worked for its author, but job-board APIs change without notice, and I can't promise support or results. Use it, adapt it, and share it.
+
 ## Files you should have
 
 | File | What it is |
@@ -20,6 +18,7 @@ posting — it won't manufacture opportunities that don't exist yet.
 | `job_search.py` | The script itself |
 | `secrets.env.example` | Template for your credentials — copy and rename it |
 | `README.md` | This file |
+| `requirements.txt` | Python dependency list (`pip install -r requirements.txt`) |
 | `.gitignore` | Keeps your credentials and job history out of Git |
 | `LICENSE` | MIT license |
 

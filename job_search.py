@@ -5,7 +5,7 @@ job_search.py  -  daily remote/hybrid technical-writing job digest
 Sources
   * Adzuna - keyword search, plus a remote-flavoured pass and an optional
     local-commute pass around one city
-  * Remotewx, We Work Remotely, Remotive, RemoteOK
+  * We Work Remotely, Remotive, RemoteOK
   * Company career boards via public Greenhouse / Lever / Ashby / Workable /
     Teamtailor / SmartRecruiters APIs (see COMPANY_BOARDS)
 
@@ -19,7 +19,7 @@ after REPORT_RETENTION_DAYS). Credentials live in secrets.env next to this
 script - never paste them into this file.
 
 ======================================================================
-BEFORE YOU RUN THIS: read SETUP.md, then edit the "PERSONALIZE" block
+BEFORE YOU RUN THIS: read README.md, then edit the "PERSONALIZE" block
 just below. Everything in that block is specific to YOU - your country,
 your commute radius, your pay floor, your title/company preferences.
 Everything after it is shared logic that should work for any technical
@@ -147,7 +147,7 @@ REQUIRED_TITLE_KEYWORDS = [
 ]
 
 EXCLUDED_TITLE_KEYWORDS = [
-    "intern", "buyer", "product owner", "marketing", "scientist",
+    "intern", "internship", "co-op", "coop", "buyer", "product owner", "marketing", "scientist",
     "proposal", "accountant", "recruiter", "sales", "solutions specialist",
     "content engineer", "content designer", "copywriter",
     "content marketing", "developer content writer",
@@ -206,6 +206,7 @@ USER_AGENT_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 # 3. SMALL HELPERS
 # ==============================================================================
 STATS = {}   # per-source diagnostics: {"Adzuna": {"fetched": 120, "errors": [...]}}
+NOT_FOUND = []   # company boards that returned HTTP 404 (wrong slug): delete these
 
 
 def norm_ws(s):
@@ -309,6 +310,8 @@ def run_source(label, fn, *args, item=None):
     except requests.HTTPError as e:
         code = e.response.status_code if getattr(e, "response", None) is not None else "?"
         hint = " (check the company slug)" if code == 404 else ""
+        if code == 404:
+            NOT_FOUND.append(tag)
         msg = f"{tag}: HTTP {code}{hint}"
     except Exception as e:
         msg = f"{tag}: {type(e).__name__}: {str(e)[:100]}"
@@ -644,7 +647,7 @@ def collect_all_jobs():
         STATS["Adzuna"] = {"fetched": 0, "errors": ["skipped: ADZUNA_APP_ID / ADZUNA_APP_KEY not set"]}
         print("  Adzuna: skipped (no keys)")
 
-    raw += run_source("Remotewx", fetch_remotewx_jobs)
+    # Remotewx is no longer fetched: its endpoint returned invalid JSON on every run.
 
     raw += run_source("We Work Remotely", fetch_weworkremotely_jobs)
     for params in ({"category": "writing"}, {"search": "technical writer"},
@@ -663,7 +666,8 @@ def collect_all_jobs():
 # ==============================================================================
 def is_relevant_title(title):
     t = title.lower()
-    if any(x in t for x in EXCLUDED_TITLE_KEYWORDS):
+    # Whole words only, so "intern" no longer rejects "International" or "Internal".
+    if any(re.search(rf"\b{re.escape(x)}s?\b", t) for x in EXCLUDED_TITLE_KEYWORDS):
         return False
     return any(r in t for r in REQUIRED_TITLE_KEYWORDS)
 
@@ -673,10 +677,33 @@ def is_blocked_company(name):
     return any(b in c for b in EXCLUDED_COMPANIES)
 
 
+DESC_US_ONLY_PATTERNS = [
+    r"remote\s*\((?:united states|usa|us|u\.s\.)\)",
+    r"remote\s*[-,]\s*(?:united states|usa|us)\b",
+    r"\b(?:united states|usa|us|u\.s\.)[ -]only\b",
+    r"authorized to work in the (?:united states|us|u\.s\.)",
+    r"must (?:be located|reside|live) in the (?:united states|us|u\.s\.)",
+]
+
+
+def says_us_only(desc):
+    """True when the posting text restricts the role to the US (e.g. a board tags it
+    'Anywhere' but the description says 'Remote (United States)'). Skipped if you
+    are in the US, or if the posting also names your own country."""
+    if COUNTRY_CODE == "us":
+        return False
+    d = desc.lower()
+    if any(t in d for t in HOME_COUNTRY_TERMS):
+        return False
+    return any(re.search(p, d) for p in DESC_US_ONLY_PATTERNS)
+
+
 def region_status(loc, desc=""):
     """For a REMOTE job: 'ok' (mentions Canada/worldwide...), 'verify' (bare
     'Remote'/blank, region unknown), or 'no' (US-only or another region)."""
     l, d = loc.lower(), desc.lower()
+    if says_us_only(desc):
+        return "no"
     if any(r in l for r in OK_REGIONS):
         return "ok"
     if any(p in l for p in US_ONLY):
@@ -905,7 +932,14 @@ def main(argv=None):
 
     for j in clean:
         j["pay_class"] = classify_pay(j)
-    paid_ok = [j for j in clean if j["pay_class"] != "below"]
+    # A below-floor copy of a posting beats an "unlisted" copy of the same posting.
+    def pkey(j):
+        return (clean_company_name(j["company"]), re.sub(r"[^\w\s]", "", j["title"].lower()).strip())
+    below_keys = {pkey(j) for j in clean if j["pay_class"] == "below"}
+    meets_keys = {pkey(j) for j in clean if j["pay_class"] == "meets"}
+    paid_ok = [j for j in clean if j["pay_class"] != "below"
+               and not (j["pay_class"] == "unlisted" and pkey(j) in below_keys
+                        and pkey(j) not in meets_keys)]
     funnel["after pay filter (listed pay too low dropped)"] = len(paid_ok)
 
     unique = deduplicate_jobs(paid_ok)
@@ -917,6 +951,10 @@ def main(argv=None):
     for label, stat in STATS.items():
         err = f" - {len(stat['errors'])} problem(s): {'; '.join(stat['errors'])[:300]}" if stat["errors"] else ""
         print(f"  {label}: {stat['fetched']} fetched{err}")
+
+    if NOT_FOUND:
+        print("\n--- Boards not found: delete these from COMPANY_BOARDS ---")
+        print("  " + ", ".join(NOT_FOUND))
 
     print("\n--- Filter funnel ---")
     for k, v in funnel.items():

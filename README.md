@@ -1,6 +1,6 @@
 # Daily Technical Writing Job Search
 
-A Python script, written with Claude's help, that checks ~12 job sources every day — company career pages,
+A Python script, written with Claude's help, that checks about ten job sources every day — company career pages,
 aggregators, and niche boards — filters for technical-writing roles you're
 actually eligible for (remote worldwide, or hybrid within a commute you'll
 accept), and emails you only the ones you haven't seen before.
@@ -176,8 +176,10 @@ later, since cron won't show it to you directly.
 - **Email never arrives** — check spam, and re-read the console output; it
   prints "Email sent" or "Email FAILED: <reason>" every run.
 - **A source shows "0 fetched" with errors** — not necessarily a problem;
-  read the specific error. A 404 means a company slug needs removing or
-  fixing. A timeout usually clears up on the next run.
+  read the specific error. A timeout usually clears up on the next run.
+- **"Boards not found: delete these from COMPANY_BOARDS"** at the end of a
+  run — those company names are wrong (HTTP 404). Delete them from
+  `COMPANY_BOARDS`, or fix the slug by checking the company's job-posting URL.
 - **Everything shows as "new" again after it worked yesterday** — this
   means `job_history.db` wasn't updated, almost always because email failed
   on the previous run (jobs are only marked "seen" after a successful
@@ -201,6 +203,10 @@ later, since cron won't show it to you directly.
   added based on their documented public APIs but haven't been tested
   against as much real-world data. Keep an eye on their lines in the
   console output for a while.
+- **Some postings are caught by their description, not their tag.** A board may
+  label a job "Anywhere" while the text says "Remote (United States)". The script
+  checks descriptions for common US-only wording and drops those jobs, but it
+  can't catch every phrasing, so always read the posting before applying.
 - **Free APIs ask to be used considerately.** A few of these sources are
   small, free services asking for reasonable call volumes, not relentless
   polling. Running this more than once a day isn't necessary and risks

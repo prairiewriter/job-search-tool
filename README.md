@@ -103,7 +103,8 @@ python job_search.py --dry-run
 (On Mac/Linux, use `python3` instead of `python`.)
 
 This fetches and filters everything but sends no email and doesn't record
-anything as "seen" — safe to run as many times as you like. Watch the
+anything as "seen" — safe to run as many times as you like. (If there are new
+jobs, it still saves a `jobs_report_*.html` file you can open.) Watch the
 console output: it prints one line per source, a funnel showing how many
 jobs survive each filtering step, and (if anything looks off) exactly which
 jobs got dropped and why. If a source says "not found" or shows an error,
@@ -137,8 +138,8 @@ changes.
    - **Add arguments**: the full path to the script in quotes, e.g.
      `"C:\Users\you\jobsearch\job_search.py"`
    - **Start in**: the folder itself, e.g. `C:\Users\you\jobsearch` (no
-     quotes, no trailing backslash) — this is how the script finds
-     `secrets.env` and its history file.
+     quotes, no trailing backslash). This is optional: the script looks for
+     `secrets.env` and its history file next to itself, wherever it's launched from.
 4. Finish, then right-click the task → **Properties**.
    - If you sign in with a PIN rather than a full password, leave
      **"Run only when user is logged on"** selected (the default) — no
@@ -174,7 +175,7 @@ later, since cron won't show it to you directly.
   what's actually on disk. Run `dir *.py` (Windows) or `ls *.py` (Mac/Linux)
   to see the real filename.
 - **Email never arrives** — check spam, and re-read the console output; it
-  prints "Email sent" or "Email FAILED: <reason>" every run.
+  prints "Report emailed to <address>" or "Email FAILED: <reason>" every run.
 - **A source shows "0 fetched" with errors** — not necessarily a problem;
   read the specific error. A timeout usually clears up on the next run.
 - **"Boards not found: delete these from COMPANY_BOARDS"** at the end of a
@@ -186,7 +187,9 @@ later, since cron won't show it to you directly.
   send). Fix the email problem and it'll catch up automatically.
 - **Environment variables set with `setx`/`export` don't seem to work** —
   use `secrets.env` instead; it's more reliable, since variables set in one
-  terminal window often aren't visible in a different one.
+  terminal window often aren't visible in a different one. (The script reads
+  ordinary environment variables too, which is handy in containers or CI. If a
+  variable is set in both places, the value in `secrets.env` wins.)
 
 ## Known limitations, worth knowing up front
 
@@ -206,7 +209,9 @@ later, since cron won't show it to you directly.
 - **Some postings are caught by their description, not their tag.** A board may
   label a job "Anywhere" while the text says "Remote (United States)". The script
   checks descriptions for common US-only wording and drops those jobs, but it
-  can't catch every phrasing, so always read the posting before applying.
+  can't catch every phrasing, so always read the posting before applying. That
+  check looks for US wording only; if you're outside the US, it won't catch
+  "UK only", "EU only" and similar.
 - **Free APIs ask to be used considerately.** A few of these sources are
   small, free services asking for reasonable call volumes, not relentless
   polling. Running this more than once a day isn't necessary and risks

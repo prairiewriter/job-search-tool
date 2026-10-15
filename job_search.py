@@ -56,6 +56,11 @@ if env_file.exists():
                 key, val = line.split("=", 1)
                 os.environ[key.strip()] = val.strip().strip("'\"")
 
+# Adzuna credentials (free key from https://developer.adzuna.com/signup).
+# If either is blank, the Adzuna source is skipped and everything else still runs.
+ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID", "")
+ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "")
+
 # ==============================================================================
 # 2A. PERSONALIZE  -  edit every value in this block for your own situation.
 #     Nothing below this block needs to change for normal use.
@@ -119,8 +124,11 @@ HOME_COUNTRY_TERMS = ["canada"]   # add your province/state if needed
 # 2B. SHARED DEFAULTS  -  reasonable for most technical writers as-is.
 #     Adjust only if your own title/search preferences differ.
 # ==============================================================================
-DB_FILE = HERE / "job_history.db"   # NEVER auto-deleted: this is what makes
-                                     # "only new jobs" work across days.
+# Optional: set JOBSEARCH_STATE_DIR to keep the history database somewhere other
+# than next to the script (for example a mounted volume in a container).
+# The database is NEVER auto-deleted: it is what makes "only new jobs" work
+# across days.
+DB_FILE = Path(os.getenv("JOBSEARCH_STATE_DIR") or HERE) / "job_history.db"
 REPORT_RETENTION_DAYS = 7           # old jobs_report_*.html files older than
                                      # this are deleted automatically.
 
@@ -133,6 +141,14 @@ SEARCH_QUERIES = [
     "Information Developer",
     "Information Architect",
 ]
+
+# Currency label shown next to Adzuna pay. This only labels the figures Adzuna
+# returns; it doesn't convert anything. Add your country if it's missing.
+ADZUNA_CURRENCY = {"ca": "CAD", "us": "USD", "gb": "GBP", "au": "AUD", "nz": "NZD",
+                   "sg": "SGD", "in": "INR", "za": "ZAR", "br": "BRL", "mx": "MXN",
+                   "ch": "CHF", "pl": "PLN",
+                   "at": "EUR", "be": "EUR", "de": "EUR", "es": "EUR", "fr": "EUR",
+                   "it": "EUR", "nl": "EUR"}
 
 # Adzuna passes: plain query, "<query> remote", and a local search around LOCAL_WHERE.
 ADZUNA_ALSO_SEARCH_REMOTE = True
@@ -406,7 +422,8 @@ def fetch_adzuna_jobs(query, where=None):
                 r.get("redirect_url", ""), desc, r.get("created", ""),
                 is_remote=remote_said or country_wide,
                 is_hybrid=is_hybrid_txt or (is_local and not remote_said),
-                sal_min=r.get("salary_min"), sal_max=r.get("salary_max"), currency="CAD",
+                sal_min=r.get("salary_min"), sal_max=r.get("salary_max"),
+                currency=ADZUNA_CURRENCY.get(COUNTRY_CODE, ""),
                 pay_estimated=str(r.get("salary_is_predicted", "0")) == "1")
             if country_wide and not remote_said:
                 job["note"] = f"{HOME_LABEL}-wide listing: confirm it is remote"
@@ -417,32 +434,8 @@ def fetch_adzuna_jobs(query, where=None):
     return out
 
 
-# Remote Rocketship: removed. Its "API" (REMOTE_ROCKETSHIP_API_KEY / openclaw
-# endpoint) does not correspond to any documented or discoverable public or
-# member API - it appears to have been invented, not real. Their membership
-# grants site access, not API access. Check remoterocketship.com manually
-# instead of relying on this script for that source.
-
-
-def fetch_remotewx_jobs():
-    """https://github.com/remotewx/api - free, keyless, documented public API.
-    Fetched ONCE per run (their own launch post asks for weekly polling at
-    most, not rapid repeated calls) - title filtering happens downstream in
-    the normal pipeline, so no server-side query is needed here."""
-    resp = requests.get("https://remotewx.com/api", params={"limit": 500},
-                        headers=USER_AGENT_HEADER, timeout=20)
-    resp.raise_for_status()
-    payload = resp.json()
-    if "jobs" not in payload:
-        raise RuntimeError(f"unexpected response shape: {str(payload)[:150]}")
-    out = []
-    for r in payload.get("jobs", []):
-        region = (r.get("region") or "").lower()
-        loc = "Worldwide" if region in ("anywhere", "") else region.replace("-", " ").title()
-        out.append(make_job("Remotewx", r.get("id"), r.get("title", ""), r.get("company", ""),
-                            loc, r.get("url", ""), r.get("description", ""), r.get("createdAt", ""),
-                            pay_text=(r.get("salary") or "Pay not listed")))
-    return out
+# Remote Rocketship has no public API that this script can use. Check
+# remoterocketship.com by hand instead.
 
 
 def fetch_weworkremotely_jobs():
@@ -647,8 +640,6 @@ def collect_all_jobs():
         STATS["Adzuna"] = {"fetched": 0, "errors": ["skipped: ADZUNA_APP_ID / ADZUNA_APP_KEY not set"]}
         print("  Adzuna: skipped (no keys)")
 
-    # Remotewx is no longer fetched: its endpoint returned invalid JSON on every run.
-
     raw += run_source("We Work Remotely", fetch_weworkremotely_jobs)
     for params in ({"category": "writing"}, {"search": "technical writer"},
                    {"search": "documentation"}):
@@ -677,6 +668,9 @@ def is_blocked_company(name):
     return any(b in c for b in EXCLUDED_COMPANIES)
 
 
+# NOTE: these patterns catch US-only wording only. If you're outside the US, the
+# description check won't catch "UK only", "EU only" and so on; read postings
+# before you apply, or add patterns for your own region here.
 DESC_US_ONLY_PATTERNS = [
     r"remote\s*\((?:united states|usa|us|u\.s\.)\)",
     r"remote\s*[-,]\s*(?:united states|usa|us)\b",
